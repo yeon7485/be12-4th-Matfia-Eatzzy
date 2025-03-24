@@ -1,0 +1,57 @@
+version: 2.1
+
+jobs:
+  frontend-build:
+    docker:
+      - image: node:18
+    working_directory: ~/project
+    steps:
+      - checkout
+      - run:
+          name: Install Dependencies
+          command: |
+            cd frontend
+            npm install
+      - run:
+          name: Build Frontend
+          command: |
+            cd frontend
+            npm run build
+      - persist_to_workspace:
+          root: .
+          paths:
+            - frontend/build
+
+  docker-build-and-push:
+    docker:
+      - image: cimg/base:2022.09
+        auth:
+          username: $DOCKERHUB_USERNAME
+          password: $DOCKERHUB_PASSWORD
+    working_directory: ~/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/project
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - run:
+          name: Build Docker image
+          command: |
+            TAG=0.1.$CIRCLE_BUILD_NUM
+            docker build -t $DOCKERHUB_USERNAME/frontend:$TAG ./frontend
+      - run:
+          name: Push Docker image
+          command: |
+            TAG=0.1.$CIRCLE_BUILD_NUM
+            docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD
+            docker push $DOCKERHUB_USERNAME/frontend:$TAG
+
+workflows:
+  version: 2
+  build-and-push:
+    jobs:
+      - frontend-build
+      - docker-build-and-push:
+          requires:
+            - frontend-build

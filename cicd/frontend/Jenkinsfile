@@ -1,0 +1,31 @@
+pipeline {
+    agent any
+    environment {
+        CIRCLECI_TOKEN = credentials('CIRCLECI_TOKEN')
+        FRONTEND_PROJECT = 'circleci/56zrrcrNhwQcnZjHs8otbf/MxZvnceheMTnmFMdDSK7zS'
+        FRONTEND_DEFINITION_ID = 'a9b8f906-44c8-4259-9662-6ad145ac99bb'
+    }
+
+    stages {
+        stage('Trigger CircleCI Frontend') {
+            steps {
+                echo "Triggering CircleCI Frontend Project"
+
+                sh """
+                curl --location 'https://circleci.com/api/v2/project/${FRONTEND_PROJECT}/pipeline/run' \\
+                --header 'Circle-Token: ${CIRCLECI_TOKEN}' \\
+                --header 'Content-Type: application/json' \\
+                --data '{
+                    "definition_id": "${FRONTEND_DEFINITION_ID}",
+                    "config": {
+                        "branch": "frontend-main"
+                    },
+                    "checkout": {
+                        "branch": "frontend-main"
+                    }
+                }'
+                """
+            }
+        }
+    }
+}
