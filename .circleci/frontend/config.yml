@@ -25,7 +25,7 @@ jobs:
       - persist_to_workspace:
           root: .
           paths:
-            - frontend/build
+            - frontend/dist
 
   docker-build-and-push:
     docker:
