@@ -19,9 +19,9 @@ jobs:
             cd frontend
             npm run build
       - run:
-        name: Debug Build Output
-        command: |
-          ls -al frontend
+          name: Debug Build Output
+          command: |
+            ls -al frontend
       - persist_to_workspace:
           root: .
           paths:
