@@ -1,0 +1,31 @@
+pipeline {
+    agent any
+    environment {
+        CIRCLECI_TOKEN = credentials('CIRCLECI_TOKEN')
+        BACKEND_PROJECT = 'circleci/8eDo7gsovy8n4ZEdNpncs7/KwAaRbtqoqnubyNUgV7Fq1'
+        BACKEND_DEFINITION_ID = 'adf14913-c389-4688-81ed-8b4939dd4cdf'
+    }
+
+    stages {
+        stage('Trigger CircleCI Backend') {
+            steps {
+                echo "Triggering CircleCI Backend Project"
+
+                sh """
+                curl --location 'https://circleci.com/api/v2/project/${BACKEND_PROJECT}/pipeline/run' \\
+                --header 'Circle-Token: ${CIRCLECI_TOKEN}' \\
+                --header 'Content-Type: application/json' \\
+                --data '{
+                    "definition_id": "${BACKEND_DEFINITION_ID}",
+                    "config": {
+                        "branch": "backend-main"
+                    },
+                    "checkout": {
+                        "branch": "backend-main"
+                    }
+                }'
+                """
+            }
+        }
+    }
+}
