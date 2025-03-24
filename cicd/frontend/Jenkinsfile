@@ -3,7 +3,7 @@ pipeline {
     environment {
         CIRCLECI_TOKEN = credentials('CIRCLECI_TOKEN')
         FRONTEND_PROJECT = 'circleci/56zrrcrNhwQcnZjHs8otbf/MxZvnceheMTnmFMdDSK7zS'
-        FRONTEND_DEFINITION_ID = 'a9b8f906-44c8-4259-9662-6ad145ac99bb'
+        FRONTEND_DEFINITION_ID = '08b205b0-842e-4238-a550-77cd45a7ce8b'
     }
 
     stages {
