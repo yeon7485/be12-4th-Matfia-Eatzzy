@@ -69,7 +69,7 @@ jobs:
       - run:
           name: Apply canary deployment + gradual traffic shift
           command: |
-            ssh -o StrictHostKeyChecking=no test@192.0.3.10 << EOF
+            ssh -o StrictHostKeyChecking=no test@192.0.3.10 \<< EOF
               echo "[1] Apply Deployment"
               kubectl apply -f /home/test/k8s/frontend-deployment-b.yml
 

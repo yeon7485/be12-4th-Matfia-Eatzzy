@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-b
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      type: frontend
+      deployment: b
+  template:
+    metadata:
+      labels:
+        type: frontend
+        deployment: b
+    spec:
+      containers:
+        - name: frontend-b
+          image: seyeonni/frontend:latest # ← 이 부분을 sed로 치환
+          ports:
+            - containerPort: 80
