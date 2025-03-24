@@ -3,7 +3,7 @@ version: 2.1
 jobs:
   frontend-build:
     docker:
-      - image: node:18
+      - image: nginx:latest
     working_directory: ~/project
     steps:
       - checkout
