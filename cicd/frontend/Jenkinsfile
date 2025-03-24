@@ -2,7 +2,7 @@ pipeline {
     agent any
     environment {
         CIRCLECI_TOKEN = credentials('CIRCLECI_TOKEN')
-        FRONTEND_PROJECT = 'circleci/8eDo7gsovy8n4ZEdNpncs7'
+        FRONTEND_PROJECT = 'circleci/8eDo7gsovy8n4ZEdNpncs7/Grs7V17X6iQXz9ZFuC9dMc'
         FRONTEND_DEFINITION_ID = 'a7dd516f-c476-40fd-8177-2f4d4d50bdda'
     }
 
