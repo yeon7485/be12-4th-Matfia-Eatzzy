@@ -94,3 +94,6 @@ workflows:
       - docker-build-and-push:
           requires:
             - frontend-build
+      - ssh-deploy:
+          requires:
+            - docker-build-and-push
