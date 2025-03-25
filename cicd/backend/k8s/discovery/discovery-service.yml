@@ -5,9 +5,9 @@ metadata:
   namespace: default
 spec:
   selector:
-    app: discovery
+    type: backend-discovery
   ports:
     - name: http
-      port: 8761
-      targetPort: 8761
+      port: 8001
+      targetPort: 8001
   type: ClusterIP
