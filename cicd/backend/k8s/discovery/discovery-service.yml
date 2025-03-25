@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: discovery-svc
+  name: discovery-service
   namespace: default
 spec:
   selector:
