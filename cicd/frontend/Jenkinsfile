@@ -97,5 +97,43 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy Canary B') {
+    steps {
+        script {
+            sshPipelineStep(
+                remote: [
+                    name: 'k8s-server',
+                    host: '192.0.3.10',
+                    user: 'test',
+                    identityFile: '/home/jenkins/.ssh/id_rsa',
+                    allowAnyHosts: true
+                ],
+                command: '''
+                    echo "[0] Apply Ingress Canary Configuration"
+                    kubectl apply -f k8s/frontend-ingress-canary.yml
+
+                    echo "[1] Deploy B (Keep A running)"
+                    kubectl apply -f k8s/frontend-deployment-b.yml
+
+                    echo "[2] Wait and shift 50% traffic to B"
+                    sleep 5
+                    kubectl patch ingress frontend-ingress-canary -p '{"metadata":{"annotations":{"nginx.ingress.kubernetes.io/canary-weight":"50"}}}'
+
+                    echo "[3] Wait and shift 100% traffic to B"
+                    sleep 5
+                    kubectl patch ingress frontend-ingress-canary -p '{"metadata":{"annotations":{"nginx.ingress.kubernetes.io/canary-weight":"100"}}}'
+
+                    echo "[4] Disable canary mode"
+                    sleep 5
+                    kubectl patch ingress frontend-ingress-canary -p '{"metadata":{"annotations":{"nginx.ingress.kubernetes.io/canary":"false"}}}'
+
+                    echo "[5] Scale down A (Optional)"
+                    kubectl scale deployment frontend-deployment-a --replicas=0
+                '''
+            )
+        }
+    }
+}
     }
 }
