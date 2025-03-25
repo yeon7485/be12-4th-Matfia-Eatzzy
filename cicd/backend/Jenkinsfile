@@ -46,10 +46,9 @@ pipeline {
         stage('Poll CircleCI Pipeline Status') {
             steps {
                 script {
-                    def pipelineId = readFile('pipeline_id.txt').trim()
-                    echo "⏳ Polling CircleCI Pipeline Status (ID: ${pipelineId})"
+                    pipelineId = readFile('pipeline_id.txt').trim()
+                    echo "⏳ Polling CircleCI Workflow Status (ID: ${pipelineId})"
 
-                    def pipelineId = readFile('pipeline_id.txt').trim()
                     def workflowStatus = ""
                     def maxRetries = 30
                     def retryCount = 0
@@ -59,8 +58,7 @@ pipeline {
                         sleep intervalSec
                         retryCount++
 
-                        // GET workflows of this pipeline
-                        def statusResponse = sh(
+                        workflowStatus = sh(
                             script: """
                                 curl --silent --location "https://circleci.com/api/v2/pipeline/${pipelineId}/workflow" \\
                                 --header "Circle-Token: ${CIRCLECI_TOKEN}" | jq -r '.items[0].status'
@@ -68,7 +66,6 @@ pipeline {
                             returnStdout: true
                         ).trim()
 
-                        workflowStatus = statusResponse
                         echo "[${retryCount}] Workflow status: ${workflowStatus}"
 
                         if (workflowStatus in ["running", "not_run", "on_hold"]) {
@@ -88,7 +85,6 @@ pipeline {
                             error("⏰ Timed out waiting for CircleCI workflow to complete.")
                         }
                     }
-
                 }
             }
         }
@@ -98,7 +94,6 @@ pipeline {
                 script {
                     echo "🚀 Deploying All Module YAMLs"
 
-                    // ✅ 각 모듈별 디렉토리를 순회하면서 YAML 전송 및 배포
                     sh """
                     for dir in cicd/backend/k8s/*; do
                       module=\$(basename \$dir)
