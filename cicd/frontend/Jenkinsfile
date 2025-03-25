@@ -130,6 +130,7 @@ pipeline {
 
                     echo "[5] Scale down A (Optional)"
                     kubectl scale deployment frontend-deployment-a --replicas=0
+                    
                 '''
             )
         }
