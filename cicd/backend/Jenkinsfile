@@ -11,9 +11,9 @@ pipeline {
   stages {
     stage('Trigger CircleCI Backend') {
       steps {
-        echo "🚀 Triggering CircleCI Backend Project"
-
         script {
+          echo "🚀 Triggering CircleCI Backend Project"
+
           def response = sh(
             script: """
               curl --silent --location 'https://circleci.com/api/v2/project/${BACKEND_PROJECT}/pipeline/run' \\
@@ -21,12 +21,8 @@ pipeline {
               --header 'Content-Type: application/json' \\
               --data '{
                 "definition_id": "${BACKEND_DEFINITION_ID}",
-                "config": {
-                  "branch": "backend-main"
-                },
-                "checkout": {
-                  "branch": "backend-main"
-                }
+                "config": { "branch": "backend-main" },
+                "checkout": { "branch": "backend-main" }
               }'
             """,
             returnStdout: true
@@ -49,15 +45,7 @@ pipeline {
           def pipelineId = readFile('pipeline_id.txt').trim()
           echo "⏳ Polling CircleCI Workflow Status (ID: ${pipelineId})"
 
-          def workflowId = ""
-          def workflowStatus = ""
-          def buildNumber = ""
-          def retryCount = 0
-          def maxRetries = 30
-          def intervalSec = 10
-
-          // 1. 워크플로우 ID 가져오기
-          workflowId = sh(
+          def workflowId = sh(
             script: """
               curl --silent --location "https://circleci.com/api/v2/pipeline/${pipelineId}/workflow" \\
               --header "Circle-Token: ${CIRCLECI_TOKEN}" | jq -r '.items[0].id'
@@ -65,12 +53,16 @@ pipeline {
             returnStdout: true
           ).trim()
 
-          // 2. 워크플로우 상태 확인 루프
+          def status = ""
+          def maxRetries = 30
+          def retryCount = 0
+          def intervalSec = 10
+
           while (true) {
             sleep intervalSec
             retryCount++
 
-            workflowStatus = sh(
+            status = sh(
               script: """
                 curl --silent --location "https://circleci.com/api/v2/workflow/${workflowId}" \\
                 --header "Circle-Token: ${CIRCLECI_TOKEN}" | jq -r '.status'
@@ -78,37 +70,31 @@ pipeline {
               returnStdout: true
             ).trim()
 
-            echo "[${retryCount}] Workflow status: ${workflowStatus}"
+            echo "[${retryCount}] Workflow status: ${status}"
 
-            if (workflowStatus in ["running", "not_run", "on_hold"]) {
-              continue
-            }
-
-            if (workflowStatus in ["failed", "failing", "error", "canceled", "unauthorized"]) {
-              error("❌ CircleCI workflow failed with status: ${workflowStatus}")
-            }
-
-            if (workflowStatus == "success") {
-              echo "✅ CircleCI workflow completed successfully!"
+            if (status == "success") {
+              echo "✅ Workflow completed successfully!"
               break
             }
 
+            if (status in ["failed", "failing", "error", "canceled", "unauthorized"]) {
+              error("❌ Workflow failed: ${status}")
+            }
+
             if (retryCount >= maxRetries) {
-              error("⏰ Timed out waiting for CircleCI workflow to complete.")
+              error("⏰ Timed out waiting for workflow completion.")
             }
           }
 
-          // 3. docker-build-and-push job의 job_number = CircleCI 빌드 번호
-          buildNumber = sh(
+          def buildNumber = sh(
             script: """
               curl --silent --location "https://circleci.com/api/v2/workflow/${workflowId}/job" \\
-              --header "Circle-Token: ${CIRCLECI_TOKEN}" \\
-              | jq -r '.items[] | select(.name == "docker-build-and-push") | .job_number'
+              --header "Circle-Token: ${CIRCLECI_TOKEN}" | jq -r '.items[] | select(.name == "docker-build-and-push") | .job_number'
             """,
             returnStdout: true
           ).trim()
 
-          echo "📦 CircleCI Docker Build Number: ${buildNumber}"
+          echo "🐳 CircleCI Docker Build Number: ${buildNumber}"
           writeFile file: 'circleci_build_number.txt', text: buildNumber
         }
       }
@@ -118,7 +104,7 @@ pipeline {
       steps {
         script {
           def buildTag = readFile('circleci_build_number.txt').trim()
-          echo "🚀 Deploying All Module YAMLs with TAG: ${buildTag}"
+          echo "🚀 Deploying All YAMLs with tag: ${buildTag}"
 
           sh """
             for dir in cicd/backend/k8s/*; do
@@ -128,7 +114,6 @@ pipeline {
               ssh -o StrictHostKeyChecking=no ${DEPLOY_TARGET} "mkdir -p /home/test/k8s/\$module"
 
               for file in \$dir/*.yml; do
-                echo "📂 Sending \$file"
                 scp -o StrictHostKeyChecking=no \$file ${DEPLOY_TARGET}:/home/test/k8s/\$module/
                 ssh -o StrictHostKeyChecking=no ${DEPLOY_TARGET} "sed -i 's/latest/0.1.${buildTag}/g' /home/test/k8s/\$module/\$(basename \$file)"
                 ssh -o StrictHostKeyChecking=no ${DEPLOY_TARGET} "kubectl apply -f /home/test/k8s/\$module/\$(basename \$file)"
@@ -148,7 +133,7 @@ pipeline {
               for svc in app-api resv-api gateway; do
                 ssh ${DEPLOY_TARGET} kubectl rollout status -n default -f /home/test/k8s/\$svc/\$svc-deployment-green.yml
                 ssh ${DEPLOY_TARGET} kubectl wait --for=condition=available -n default -f /home/test/k8s/\$svc/\$svc-deployment-green.yml --timeout=120s
-                ssh ${DEPLOY_TARGET} kubectl apply -f /home/test/k8s/\$svc/\$svc-service-green.yml
+                ssh ${DEPLOY_TARGET} kubectl patch svc \$svc-service -n default -p '{"spec":{"selector":{"deployment":"green"}}}'
                 ssh ${DEPLOY_TARGET} kubectl scale -n default -f /home/test/k8s/\$svc/\$svc-deployment-blue.yml --replicas=0 || true
               done
 
@@ -158,7 +143,7 @@ pipeline {
               for svc in app-api resv-api gateway; do
                 ssh ${DEPLOY_TARGET} kubectl rollout status -n default -f /home/test/k8s/\$svc/\$svc-deployment-blue.yml
                 ssh ${DEPLOY_TARGET} kubectl wait --for=condition=available -n default -f /home/test/k8s/\$svc/\$svc-deployment-blue.yml --timeout=120s
-                ssh ${DEPLOY_TARGET} kubectl apply -f /home/test/k8s/\$svc/\$svc-service-blue.yml
+                ssh ${DEPLOY_TARGET} kubectl patch svc \$svc-service -n default -p '{"spec":{"selector":{"deployment":"blue"}}}'
                 ssh ${DEPLOY_TARGET} kubectl scale -n default -f /home/test/k8s/\$svc/\$svc-deployment-green.yml --replicas=0 || true
               done
             fi
