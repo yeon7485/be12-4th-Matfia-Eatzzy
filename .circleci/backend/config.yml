@@ -1,21 +1,17 @@
 version: 2.1
 
 jobs:
-  gradle-build:
+  build-and-push:
     docker:
       - image: cimg/openjdk:17.0
     working_directory: ~/project
     steps:
       - checkout
-      - run:
-          name: 디버깅 - gradlew 있는지 확인
-          command: |
-            pwd
-            cd backend
-            ls -al
+
       - run:
           name: Add Permission
           command: chmod +x backend/gradlew
+
       - run:
           name: Gradle Build for all backend modules
           command: |
@@ -23,27 +19,10 @@ jobs:
               echo "🔧 Building JAR for $module"
               ./backend/gradlew --project-dir backend :$module:bootJar
             done
-      - persist_to_workspace:
-          root: .
-          paths:
-            - backend/app-api/build/libs/*.jar
-            - backend/resv-api/build/libs/*.jar
-            - backend/gateway/build/libs/*.jar
-            - backend/discovery/build/libs/*.jar
 
-  docker-build-and-push:
-    docker:
-      - image: cimg/base:2022.09
-        auth:
-          username: $DOCKERHUB_USERNAME
-          password: $DOCKERHUB_PASSWORD
-    working_directory: ~/project
-    steps:
-      - checkout
-      - attach_workspace:
-          at: ~/project
       - setup_remote_docker:
           docker_layer_caching: true
+
       - run:
           name: Docker Login
           command: |
@@ -66,7 +45,4 @@ workflows:
   version: 2
   build-and-push:
     jobs:
-      - gradle-build
-      - docker-build-and-push:
-          requires:
-            - gradle-build
+      - build-and-push
