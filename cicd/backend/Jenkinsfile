@@ -49,42 +49,46 @@ pipeline {
                     def pipelineId = readFile('pipeline_id.txt').trim()
                     echo "⏳ Polling CircleCI Pipeline Status (ID: ${pipelineId})"
 
-                    def pipelineState = ""
-                    def maxRetries    = 30
-                    def intervalSec   = 10
-                    def retryCount    = 0
+                    def pipelineId = readFile('pipeline_id.txt').trim()
+                    def workflowStatus = ""
+                    def maxRetries = 30
+                    def retryCount = 0
+                    def intervalSec = 10
 
                     while (true) {
                         sleep intervalSec
                         retryCount++
 
-                        pipelineState = sh(
+                        // GET workflows of this pipeline
+                        def statusResponse = sh(
                             script: """
-                                curl --silent --location "https://circleci.com/api/v2/pipeline/${pipelineId}" \\
-                                --header "Circle-Token: ${CIRCLECI_TOKEN}" | jq -r '.state'
+                                curl --silent --location "https://circleci.com/api/v2/pipeline/${pipelineId}/workflow" \\
+                                --header "Circle-Token: ${CIRCLECI_TOKEN}" | jq -r '.items[0].status'
                             """,
                             returnStdout: true
                         ).trim()
 
-                        echo "[${retryCount}] Current pipeline state: ${pipelineState}"
+                        workflowStatus = statusResponse
+                        echo "[${retryCount}] Workflow status: ${workflowStatus}"
 
-                        if (pipelineState == "created" || pipelineState == "pending") {
+                        if (workflowStatus in ["running", "not_run", "on_hold"]) {
                             continue
                         }
 
-                        if (pipelineState in ["errored", "failing", "canceled"]) {
-                            error("❌ Pipeline failed with status: ${pipelineState}")
+                        if (workflowStatus in ["failed", "failing", "error", "canceled", "unauthorized"]) {
+                            error("❌ CircleCI workflow failed with status: ${workflowStatus}")
                         }
 
-                        if (pipelineState == "successful") {
-                            echo "✅ Pipeline completed successfully!"
+                        if (workflowStatus == "success") {
+                            echo "✅ CircleCI workflow completed successfully!"
                             break
                         }
 
                         if (retryCount >= maxRetries) {
-                            error("⏰ Timed out waiting for pipeline to complete.")
+                            error("⏰ Timed out waiting for CircleCI workflow to complete.")
                         }
                     }
+
                 }
             }
         }
