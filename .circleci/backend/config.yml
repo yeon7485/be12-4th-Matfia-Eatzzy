@@ -8,6 +8,11 @@ jobs:
     steps:
       - checkout
       - run:
+          name: 디버깅 - gradlew 있는지 확인
+          command: |
+            pwd
+            ls -al
+      - run:
           name: Add Permission
           command: chmod +x gradlew
       - run:
