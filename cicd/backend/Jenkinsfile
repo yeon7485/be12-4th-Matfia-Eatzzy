@@ -133,7 +133,7 @@ pipeline {
               for svc in app-api resv-api gateway; do
                 ssh ${DEPLOY_TARGET} kubectl rollout status -n default -f /home/test/k8s/\$svc/\$svc-deployment-green.yml
                 ssh ${DEPLOY_TARGET} kubectl wait --for=condition=available -n default -f /home/test/k8s/\$svc/\$svc-deployment-green.yml --timeout=120s
-                ssh ${DEPLOY_TARGET} kubectl patch svc \$svc-service -n default -p '{\"spec\":{\"selector\":{\"deployment\":\"green\"}}}'
+                ssh ${DEPLOY_TARGET} kubectl patch svc \$svc-service -n default -p '{"spec":{"selector":{"deployment":"green"}}}'
                 ssh ${DEPLOY_TARGET} kubectl scale -n default -f /home/test/k8s/\$svc/\$svc-deployment-blue.yml --replicas=0 || true
               done
 
@@ -143,7 +143,7 @@ pipeline {
               for svc in app-api resv-api gateway; do
                 ssh ${DEPLOY_TARGET} kubectl rollout status -n default -f /home/test/k8s/\$svc/\$svc-deployment-blue.yml
                 ssh ${DEPLOY_TARGET} kubectl wait --for=condition=available -n default -f /home/test/k8s/\$svc/\$svc-deployment-blue.yml --timeout=120s
-                ssh ${DEPLOY_TARGET} kubectl patch svc \$svc-service -n default -p '{\"spec\":{\"selector\":{\"deployment\":\"blue\"}}}'
+                ssh ${DEPLOY_TARGET} kubectl patch svc \$svc-service -n default -p '{"spec":{"selector":{"deployment":"blue"}}}'
                 ssh ${DEPLOY_TARGET} kubectl scale -n default -f /home/test/k8s/\$svc/\$svc-deployment-green.yml --replicas=0 || true
               done
             fi
