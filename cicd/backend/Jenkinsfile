@@ -89,12 +89,12 @@ pipeline {
           def buildNumber = sh(
             script: """
               curl --silent --location "https://circleci.com/api/v2/workflow/${workflowId}/job" \\
-              --header "Circle-Token: ${CIRCLECI_TOKEN}" | jq -r '.items[] | select(.name == "docker-build-and-push") | .job_number'
+              --header "Circle-Token: ${CIRCLECI_TOKEN}" | jq -r '.items[] | select(.name == "build-and-push") | .job_number'
             """,
             returnStdout: true
           ).trim()
 
-          echo "🐳 CircleCI Docker Build Number: ${buildNumber}"
+          echo "🐳 CircleCI Build Number: ${buildNumber}"
           writeFile file: 'circleci_build_number.txt', text: buildNumber
         }
       }
