@@ -1,30 +1,140 @@
 pipeline {
     agent any
+
     environment {
-        CIRCLECI_TOKEN = credentials('CIRCLECI_TOKEN')
-        BACKEND_PROJECT = 'circleci/8eDo7gsovy8n4ZEdNpncs7/KwAaRbtqoqnubyNUgV7Fq1'
+        CIRCLECI_TOKEN        = credentials('CIRCLECI_TOKEN')
+        BACKEND_PROJECT       = 'circleci/8eDo7gsovy8n4ZEdNpncs7/KwAaRbtqoqnubyNUgV7Fq1'
         BACKEND_DEFINITION_ID = 'adf14913-c389-4688-81ed-8b4939dd4cdf'
+        DEPLOY_TARGET         = 'test@192.0.3.10'
     }
 
     stages {
         stage('Trigger CircleCI Backend') {
             steps {
-                echo "Triggering CircleCI Backend Project"
+                echo "🚀 Triggering CircleCI Backend Project"
 
-                sh """
-                curl --location 'https://circleci.com/api/v2/project/${BACKEND_PROJECT}/pipeline/run' \\
-                --header 'Circle-Token: ${CIRCLECI_TOKEN}' \\
-                --header 'Content-Type: application/json' \\
-                --data '{
-                    "definition_id": "${BACKEND_DEFINITION_ID}",
-                    "config": {
-                        "branch": "backend-main"
-                    },
-                    "checkout": {
-                        "branch": "backend-main"
+                script {
+                    def response = sh(
+                        script: """
+                            curl --silent --location 'https://circleci.com/api/v2/project/${BACKEND_PROJECT}/pipeline/run' \\
+                            --header 'Circle-Token: ${CIRCLECI_TOKEN}' \\
+                            --header 'Content-Type: application/json' \\
+                            --data '{
+                                "definition_id": "${BACKEND_DEFINITION_ID}",
+                                "config": {
+                                    "branch": "backend-main"
+                                },
+                                "checkout": {
+                                    "branch": "backend-main"
+                                }
+                            }'
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    def pipelineId = sh(
+                        script: "echo '${response}' | jq -r '.id'",
+                        returnStdout: true
+                    ).trim()
+
+                    writeFile file: 'pipeline_id.txt', text: pipelineId
+                    echo "✅ Triggered Pipeline ID: ${pipelineId}"
+                }
+            }
+        }
+
+        stage('Poll CircleCI Pipeline Status') {
+            steps {
+                script {
+                    def pipelineId = readFile('pipeline_id.txt').trim()
+                    echo "⏳ Polling CircleCI Pipeline Status (ID: ${pipelineId})"
+
+                    def pipelineState = ""
+                    def maxRetries    = 30
+                    def intervalSec   = 10
+                    def retryCount    = 0
+
+                    while (true) {
+                        sleep intervalSec
+                        retryCount++
+
+                        pipelineState = sh(
+                            script: """
+                                curl --silent --location "https://circleci.com/api/v2/pipeline/${pipelineId}" \\
+                                --header "Circle-Token: ${CIRCLECI_TOKEN}" | jq -r '.state'
+                            """,
+                            returnStdout: true
+                        ).trim()
+
+                        echo "[${retryCount}] Current pipeline state: ${pipelineState}"
+
+                        if (pipelineState == "created" || pipelineState == "pending") {
+                            continue
+                        }
+
+                        if (pipelineState in ["errored", "failing", "canceled"]) {
+                            error("❌ Pipeline failed with status: ${pipelineState}")
+                        }
+
+                        if (pipelineState == "successful") {
+                            echo "✅ Pipeline completed successfully!"
+                            break
+                        }
+
+                        if (retryCount >= maxRetries) {
+                            error("⏰ Timed out waiting for pipeline to complete.")
+                        }
                     }
-                }'
-                """
+                }
+            }
+        }
+
+        stage('SSH Deploy to Kubernetes') {
+            steps {
+                script {
+                    echo "🚀 Deploying All Module YAMLs"
+
+                    // ✅ 각 모듈별 디렉토리를 순회하면서 YAML 전송 및 배포
+                    sh """
+                    for dir in cicd/backend/k8s/*; do
+                      module=\$(basename \$dir)
+                      echo "📦 Deploying YAMLs for module: \$module"
+
+                      ssh -o StrictHostKeyChecking=no ${DEPLOY_TARGET} "mkdir -p /home/test/k8s/\$module"
+
+                      for file in \$dir/*.yml; do
+                        scp -o StrictHostKeyChecking=no \$file ${DEPLOY_TARGET}:/home/test/k8s/\$module/
+                        ssh -o StrictHostKeyChecking=no ${DEPLOY_TARGET} "kubectl apply -f /home/test/k8s/\$module/\$(basename \$file)"
+                      done
+                    done
+                    """
+
+                    echo "🚦 Rolling update to BLUE or GREEN based on BUILD_ID"
+
+                    sh """
+                    even_or_odd=\$((BUILD_ID % 2))
+                    echo "🔢 BUILD_ID: \$BUILD_ID → \$even_or_odd (0 = green, 1 = blue)"
+
+                    if [ "\$even_or_odd" -eq 0 ]; then
+                      echo "🟢 Activating GREEN deployments"
+
+                      for svc in app-api resv-api gateway; do
+                        ssh ${DEPLOY_TARGET} kubectl rollout status deployment/\$svc-green -n default
+                        ssh ${DEPLOY_TARGET} kubectl wait --for=condition=available deployment/\$svc-green --timeout=120s -n default
+                        ssh ${DEPLOY_TARGET} kubectl scale deployment \$svc-blue --replicas=0 -n default
+                      done
+
+                    else
+                      echo "🔵 Activating BLUE deployments"
+
+                      for svc in app-api resv-api gateway; do
+                        ssh ${DEPLOY_TARGET} kubectl rollout status deployment/\$svc-blue -n default
+                        ssh ${DEPLOY_TARGET} kubectl wait --for=condition=available deployment/\$svc-blue --timeout=120s -n default
+                        ssh ${DEPLOY_TARGET} kubectl scale deployment \$svc-green --replicas=0 -n default
+                      done
+                    fi
+                    """
+                }
             }
         }
     }
