@@ -15,21 +15,21 @@ jobs:
             ls -al
       - run:
           name: Add Permission
-          command: chmod +x gradlew
+          command: chmod +x backend/gradlew
       - run:
           name: Gradle Build for all backend modules
           command: |
             for module in app-api resv-api gateway discovery; do
               echo "🔧 Building JAR for $module"
-              ./gradlew :$module:bootJar
+              ./backend/gradlew :$module:bootJar
             done
       - persist_to_workspace:
           root: .
           paths:
-            - app-api/build/libs/*.jar
-            - resv-api/build/libs/*.jar
-            - gateway/build/libs/*.jar
-            - discovery/build/libs/*.jar
+            - backend/app-api/build/libs/*.jar
+            - backend/resv-api/build/libs/*.jar
+            - backend/gateway/build/libs/*.jar
+            - backend/discovery/build/libs/*.jar
 
   docker-build-and-push:
     docker:
@@ -51,7 +51,7 @@ jobs:
 
             for module in app-api resv-api gateway discovery; do
               echo "Building image for $module"
-              docker build -t $DOCKERHUB_USERNAME/$module:$TAG ./$module
+              docker build -t $DOCKERHUB_USERNAME/$module:$TAG ./backend/$module
 
               echo "Pushing image for $module"
               docker push $DOCKERHUB_USERNAME/$module:$TAG
