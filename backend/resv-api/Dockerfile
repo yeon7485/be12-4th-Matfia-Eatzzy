@@ -1,6 +1,9 @@
-FROM openjdk:17-ea-slim-buster
+FROM openjdk:17-jdk-slim
+
+WORKDIR /app
+
+COPY ./build/libs/resv-api-0.0.1-SNAPSHOT.jar app.jar
 
 EXPOSE 8082
 
-ADD ./build/libs/resv-api-0.0.1-SNAPSHOT-plain.jar /app.jar
-CMD java -jar /app.jar
+ENTRYPOINT ["java", "-jar", "app.jar"]
