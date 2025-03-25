@@ -9,7 +9,7 @@ jobs:
       - checkout
       - run:
           name: Add Permission
-          command: chmod +x ./gradlew
+          command: chmod +x gradlew
       - run:
           name: Gradle Build for all backend modules
           command: |
