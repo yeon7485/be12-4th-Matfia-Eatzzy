@@ -21,7 +21,7 @@ jobs:
           command: |
             for module in app-api resv-api gateway discovery; do
               echo "🔧 Building JAR for $module"
-              ./backend/gradlew :$module:bootJar
+              ./backend/gradlew --project-dir backend :$module:bootJar
             done
       - persist_to_workspace:
           root: .
