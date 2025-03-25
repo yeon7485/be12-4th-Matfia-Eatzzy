@@ -1,140 +1,174 @@
 pipeline {
-    agent any
+  agent any
 
-    environment {
-        CIRCLECI_TOKEN        = credentials('CIRCLECI_TOKEN')
-        BACKEND_PROJECT       = 'circleci/8eDo7gsovy8n4ZEdNpncs7/KwAaRbtqoqnubyNUgV7Fq1'
-        BACKEND_DEFINITION_ID = 'adf14913-c389-4688-81ed-8b4939dd4cdf'
-        DEPLOY_TARGET         = 'test@192.0.3.10'
+  environment {
+    CIRCLECI_TOKEN        = credentials('CIRCLECI_TOKEN')
+    BACKEND_PROJECT       = 'circleci/8eDo7gsovy8n4ZEdNpncs7/KwAaRbtqoqnubyNUgV7Fq1'
+    BACKEND_DEFINITION_ID = 'adf14913-c389-4688-81ed-8b4939dd4cdf'
+    DEPLOY_TARGET         = 'test@192.0.3.10'
+  }
+
+  stages {
+    stage('Trigger CircleCI Backend') {
+      steps {
+        echo "🚀 Triggering CircleCI Backend Project"
+
+        script {
+          def response = sh(
+            script: """
+              curl --silent --location 'https://circleci.com/api/v2/project/${BACKEND_PROJECT}/pipeline/run' \\
+              --header 'Circle-Token: ${CIRCLECI_TOKEN}' \\
+              --header 'Content-Type: application/json' \\
+              --data '{
+                "definition_id": "${BACKEND_DEFINITION_ID}",
+                "config": {
+                  "branch": "backend-main"
+                },
+                "checkout": {
+                  "branch": "backend-main"
+                }
+              }'
+            """,
+            returnStdout: true
+          ).trim()
+
+          def pipelineId = sh(
+            script: "echo '${response}' | jq -r '.id'",
+            returnStdout: true
+          ).trim()
+
+          writeFile file: 'pipeline_id.txt', text: pipelineId
+          echo "✅ Triggered Pipeline ID: ${pipelineId}"
+        }
+      }
     }
 
-    stages {
-        stage('Trigger CircleCI Backend') {
-            steps {
-                echo "🚀 Triggering CircleCI Backend Project"
+    stage('Poll CircleCI Pipeline Status') {
+      steps {
+        script {
+          def pipelineId = readFile('pipeline_id.txt').trim()
+          echo "⏳ Polling CircleCI Workflow Status (ID: ${pipelineId})"
 
-                script {
-                    def response = sh(
-                        script: """
-                            curl --silent --location 'https://circleci.com/api/v2/project/${BACKEND_PROJECT}/pipeline/run' \\
-                            --header 'Circle-Token: ${CIRCLECI_TOKEN}' \\
-                            --header 'Content-Type: application/json' \\
-                            --data '{
-                                "definition_id": "${BACKEND_DEFINITION_ID}",
-                                "config": {
-                                    "branch": "backend-main"
-                                },
-                                "checkout": {
-                                    "branch": "backend-main"
-                                }
-                            }'
-                        """,
-                        returnStdout: true
-                    ).trim()
+          def workflowId = ""
+          def workflowStatus = ""
+          def buildNumber = ""
+          def retryCount = 0
+          def maxRetries = 30
+          def intervalSec = 10
 
-                    def pipelineId = sh(
-                        script: "echo '${response}' | jq -r '.id'",
-                        returnStdout: true
-                    ).trim()
+          // 1. 워크플로우 ID 가져오기
+          workflowId = sh(
+            script: """
+              curl --silent --location "https://circleci.com/api/v2/pipeline/${pipelineId}/workflow" \\
+              --header "Circle-Token: ${CIRCLECI_TOKEN}" | jq -r '.items[0].id'
+            """,
+            returnStdout: true
+          ).trim()
 
-                    writeFile file: 'pipeline_id.txt', text: pipelineId
-                    echo "✅ Triggered Pipeline ID: ${pipelineId}"
-                }
+          // 2. 워크플로우 상태 확인 루프
+          while (true) {
+            sleep intervalSec
+            retryCount++
+
+            workflowStatus = sh(
+              script: """
+                curl --silent --location "https://circleci.com/api/v2/workflow/${workflowId}" \\
+                --header "Circle-Token: ${CIRCLECI_TOKEN}" | jq -r '.status'
+              """,
+              returnStdout: true
+            ).trim()
+
+            echo "[${retryCount}] Workflow status: ${workflowStatus}"
+
+            if (workflowStatus in ["running", "not_run", "on_hold"]) {
+              continue
             }
-        }
 
-        stage('Poll CircleCI Pipeline Status') {
-            steps {
-                script {
-                    pipelineId = readFile('pipeline_id.txt').trim()
-                    echo "⏳ Polling CircleCI Workflow Status (ID: ${pipelineId})"
-
-                    def workflowStatus = ""
-                    def maxRetries = 30
-                    def retryCount = 0
-                    def intervalSec = 10
-
-                    while (true) {
-                        sleep intervalSec
-                        retryCount++
-
-                        workflowStatus = sh(
-                            script: """
-                                curl --silent --location "https://circleci.com/api/v2/pipeline/${pipelineId}/workflow" \\
-                                --header "Circle-Token: ${CIRCLECI_TOKEN}" | jq -r '.items[0].status'
-                            """,
-                            returnStdout: true
-                        ).trim()
-
-                        echo "[${retryCount}] Workflow status: ${workflowStatus}"
-
-                        if (workflowStatus in ["running", "not_run", "on_hold"]) {
-                            continue
-                        }
-
-                        if (workflowStatus in ["failed", "failing", "error", "canceled", "unauthorized"]) {
-                            error("❌ CircleCI workflow failed with status: ${workflowStatus}")
-                        }
-
-                        if (workflowStatus == "success") {
-                            echo "✅ CircleCI workflow completed successfully!"
-                            break
-                        }
-
-                        if (retryCount >= maxRetries) {
-                            error("⏰ Timed out waiting for CircleCI workflow to complete.")
-                        }
-                    }
-                }
+            if (workflowStatus in ["failed", "failing", "error", "canceled", "unauthorized"]) {
+              error("❌ CircleCI workflow failed with status: ${workflowStatus}")
             }
-        }
 
-        stage('SSH Deploy to Kubernetes') {
-            steps {
-                script {
-                    echo "🚀 Deploying All Module YAMLs"
-
-                    sh """
-                    for dir in cicd/backend/k8s/*; do
-                      module=\$(basename \$dir)
-                      echo "📦 Deploying YAMLs for module: \$module"
-
-                      ssh -o StrictHostKeyChecking=no ${DEPLOY_TARGET} "mkdir -p /home/test/k8s/\$module"
-
-                      for file in \$dir/*.yml; do
-                        scp -o StrictHostKeyChecking=no \$file ${DEPLOY_TARGET}:/home/test/k8s/\$module/
-                        ssh -o StrictHostKeyChecking=no ${DEPLOY_TARGET} "kubectl apply -f /home/test/k8s/\$module/\$(basename \$file)"
-                      done
-                    done
-                    """
-
-                    echo "🚦 Rolling update to BLUE or GREEN based on BUILD_ID"
-
-                    sh """
-                    even_or_odd=\$((BUILD_ID % 2))
-                    echo "🔢 BUILD_ID: \$BUILD_ID → \$even_or_odd (0 = green, 1 = blue)"
-
-                    if [ "\$even_or_odd" -eq 0 ]; then
-                      echo "🟢 Activating GREEN deployments"
-
-                      for svc in app-api resv-api gateway; do
-                        ssh ${DEPLOY_TARGET} kubectl rollout status deployment/\$svc-green -n default
-                        ssh ${DEPLOY_TARGET} kubectl wait --for=condition=available deployment/\$svc-green --timeout=120s -n default
-                        ssh ${DEPLOY_TARGET} kubectl scale deployment \$svc-blue --replicas=0 -n default
-                      done
-
-                    else
-                      echo "🔵 Activating BLUE deployments"
-
-                      for svc in app-api resv-api gateway; do
-                        ssh ${DEPLOY_TARGET} kubectl rollout status deployment/\$svc-blue -n default
-                        ssh ${DEPLOY_TARGET} kubectl wait --for=condition=available deployment/\$svc-blue --timeout=120s -n default
-                        ssh ${DEPLOY_TARGET} kubectl scale deployment \$svc-green --replicas=0 -n default
-                      done
-                    fi
-                    """
-                }
+            if (workflowStatus == "success") {
+              echo "✅ CircleCI workflow completed successfully!"
+              break
             }
+
+            if (retryCount >= maxRetries) {
+              error("⏰ Timed out waiting for CircleCI workflow to complete.")
+            }
+          }
+
+          // 3. docker-build-and-push job의 job_number = CircleCI 빌드 번호
+          buildNumber = sh(
+            script: """
+              curl --silent --location "https://circleci.com/api/v2/workflow/${workflowId}/job" \\
+              --header "Circle-Token: ${CIRCLECI_TOKEN}" \\
+              | jq -r '.items[] | select(.name == "docker-build-and-push") | .job_number'
+            """,
+            returnStdout: true
+          ).trim()
+
+          echo "📦 CircleCI Docker Build Number: ${buildNumber}"
+          writeFile file: 'circleci_build_number.txt', text: buildNumber
         }
+      }
     }
+
+    stage('SSH Deploy to Kubernetes') {
+      steps {
+        script {
+          def buildTag = readFile('circleci_build_number.txt').trim()
+          echo "🚀 Deploying All Module YAMLs with TAG: ${buildTag}"
+
+          sh """
+            for dir in cicd/backend/k8s/*; do
+              module=\$(basename \$dir)
+              echo "📦 Deploying YAMLs for module: \$module"
+
+              ssh -o StrictHostKeyChecking=no ${DEPLOY_TARGET} "mkdir -p /home/test/k8s/\$module"
+
+              for file in \$dir/*.yml; do
+                echo "📂 Sending \$file"
+                scp -o StrictHostKeyChecking=no \$file ${DEPLOY_TARGET}:/home/test/k8s/\$module/
+                ssh -o StrictHostKeyChecking=no ${DEPLOY_TARGET} "sed -i 's/latest/${buildTag}/g' /home/test/k8s/\$module/\$(basename \$file)"
+                ssh -o StrictHostKeyChecking=no ${DEPLOY_TARGET} "kubectl apply -f /home/test/k8s/\$module/\$(basename \$file)"
+              done
+            done
+          """
+
+          echo "🚦 Rolling update based on BUILD_ID"
+
+          sh """
+            even_or_odd=\$((BUILD_ID % 2))
+            echo "🔢 BUILD_ID: \$BUILD_ID → \$even_or_odd (0 = green, 1 = blue)"
+
+            if [ "\$even_or_odd" -eq 0 ]; then
+              echo "🟢 Activating GREEN deployments"
+
+              for svc in app-api resv-api gateway; do
+                ssh ${DEPLOY_TARGET} kubectl rollout status -n default -f /home/test/k8s/\$svc/\$svc-deployment-green.yml
+                ssh ${DEPLOY_TARGET} kubectl wait --for=condition=available -n default -f /home/test/k8s/\$svc/\$svc-deployment-green.yml --timeout=120s
+                ssh ${DEPLOY_TARGET} kubectl apply -f /home/test/k8s/\$svc/\$svc-service-green.yml
+                ssh ${DEPLOY_TARGET} kubectl scale -n default -f /home/test/k8s/\$svc/\$svc-deployment-blue.yml --replicas=0 || true
+              done
+
+            else
+              echo "🔵 Activating BLUE deployments"
+
+              for svc in app-api resv-api gateway; do
+                ssh ${DEPLOY_TARGET} kubectl rollout status -n default -f /home/test/k8s/\$svc/\$svc-deployment-blue.yml
+                ssh ${DEPLOY_TARGET} kubectl wait --for=condition=available -n default -f /home/test/k8s/\$svc/\$svc-deployment-blue.yml --timeout=120s
+                ssh ${DEPLOY_TARGET} kubectl apply -f /home/test/k8s/\$svc/\$svc-service-blue.yml
+                ssh ${DEPLOY_TARGET} kubectl scale -n default -f /home/test/k8s/\$svc/\$svc-deployment-green.yml --replicas=0 || true
+              done
+            fi
+
+            # 🟡 discovery 는 블루그린 없이 일반 배포
+            ssh ${DEPLOY_TARGET} kubectl rollout status -n default -f /home/test/k8s/discovery/discovery-deployment.yml
+            ssh ${DEPLOY_TARGET} kubectl apply -f /home/test/k8s/discovery/discovery-service.yml
+          """
+        }
+      }
+    }
+  }
 }
