@@ -50,11 +50,12 @@ jobs:
             TAG=0.1.$CIRCLE_BUILD_NUM
 
             for module in app-api resv-api gateway discovery; do
-              echo "Building image for $module"
-              docker build -t $DOCKERHUB_USERNAME/$module:$TAG ./backend/$module
+              SHORT_NAME=$(echo $module | sed 's/-api//')
+              docker build -t $DOCKERHUB_USERNAME/$SHORT_NAME:$TAG ./backend/$module
+              docker push $DOCKERHUB_USERNAME/$SHORT_NAME:$TAG
 
               echo "Pushing image for $module"
-              docker push $DOCKERHUB_USERNAME/$module:$TAG
+              docker push $DOCKERHUB_USERNAME/$SHORT_NAME:$TAG
             done
 
 workflows:
