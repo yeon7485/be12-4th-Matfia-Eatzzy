@@ -130,7 +130,7 @@ pipeline {
               for file in \$dir/*.yml; do
                 echo "📂 Sending \$file"
                 scp -o StrictHostKeyChecking=no \$file ${DEPLOY_TARGET}:/home/test/k8s/\$module/
-                ssh -o StrictHostKeyChecking=no ${DEPLOY_TARGET} "sed -i 's/latest/${buildTag}/g' /home/test/k8s/\$module/\$(basename \$file)"
+                ssh -o StrictHostKeyChecking=no ${DEPLOY_TARGET} "sed -i 's/latest/0.1.${buildTag}/g' /home/test/k8s/\$module/\$(basename \$file)"
                 ssh -o StrictHostKeyChecking=no ${DEPLOY_TARGET} "kubectl apply -f /home/test/k8s/\$module/\$(basename \$file)"
               done
             done
