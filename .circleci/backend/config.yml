@@ -45,16 +45,21 @@ jobs:
       - setup_remote_docker:
           docker_layer_caching: true
       - run:
+          name: 🔍 Debug DockerHub Username
+          command: |
+            echo "DOCKERHUB_USERNAME: $DOCKERHUB_USERNAME"
+
+      - run:
           name: Build & Push all backend module images
           command: |
             TAG=0.1.$CIRCLE_BUILD_NUM
 
             for module in app-api resv-api gateway discovery; do
-              docker build -t $DOCKERHUB_USERNAME/$module:$TAG ./backend/$module
-              docker push $DOCKERHUB_USERNAME/$module:$TAG
+              docker build -t seyeonni/$module:$TAG ./backend/$module
+              docker push seyeonni/$module:$TAG
 
               echo "Pushing image for $module"
-              docker push $DOCKERHUB_USERNAME/$module:$TAG
+              docker push seyeonni/$module:$TAG
             done
 
 workflows:
