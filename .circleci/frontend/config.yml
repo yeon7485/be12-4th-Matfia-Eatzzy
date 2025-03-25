@@ -52,39 +52,39 @@ jobs:
             docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD
             docker push $DOCKERHUB_USERNAME/frontend:$TAG
 
-  ssh-deploy:
-    docker:
-      - image: cimg/base:stable
-    working_directory: ~/project
-    steps:
-      - checkout
-      - run:
-          name: Replace image tag in deployment file
-          command: |
-            sed -i "s/latest/0.1.$CIRCLE_BUILD_NUM/g" cicd/frontend-deployment-b.yml
-      - run:
-          name: Copy deployment file to remote server
-          command: |
-            scp -o StrictHostKeyChecking=no cicd/frontend-deployment-b.yml test@192.0.3.10:/home/test/k8s/frontend-deployment-b.yml
-      - run:
-          name: Apply canary deployment + gradual traffic shift
-          command: |
-            ssh -o StrictHostKeyChecking=no test@192.0.3.10 \<< EOF
-              echo "[1] Apply Deployment"
-              kubectl apply -f /home/test/k8s/frontend-deployment-b.yml
+  # ssh-deploy:
+  #   docker:
+  #     - image: cimg/base:stable
+  #   working_directory: ~/project
+  #   steps:
+  #     - checkout
+  #     - run:
+  #         name: Replace image tag in deployment file
+  #         command: |
+  #           sed -i "s/latest/0.1.$CIRCLE_BUILD_NUM/g" cicd/frontend-deployment-b.yml
+  #     - run:
+  #         name: Copy deployment file to remote server
+  #         command: |
+  #           scp -o StrictHostKeyChecking=no cicd/frontend-deployment-b.yml test@192.0.3.10:/home/test/k8s/frontend-deployment-b.yml
+  #     - run:
+  #         name: Apply canary deployment + gradual traffic shift
+  #         command: |
+  #           ssh -o StrictHostKeyChecking=no test@192.0.3.10 \<< EOF
+  #             echo "[1] Apply Deployment"
+  #             kubectl apply -f /home/test/k8s/frontend-deployment-b.yml
 
-              echo "[2] Wait and set canary-weight to 50"
-              sleep 5
-              kubectl patch ingress frontend-ingress-canary -p '{"metadata":{"annotations":{"nginx.ingress.kubernetes.io/canary-weight":"50"}}}'
+  #             echo "[2] Wait and set canary-weight to 50"
+  #             sleep 5
+  #             kubectl patch ingress frontend-ingress-canary -p '{"metadata":{"annotations":{"nginx.ingress.kubernetes.io/canary-weight":"50"}}}'
 
-              echo "[3] Wait and set canary-weight to 100"
-              sleep 5
-              kubectl patch ingress frontend-ingress-canary -p '{"metadata":{"annotations":{"nginx.ingress.kubernetes.io/canary-weight":"100"}}}'
+  #             echo "[3] Wait and set canary-weight to 100"
+  #             sleep 5
+  #             kubectl patch ingress frontend-ingress-canary -p '{"metadata":{"annotations":{"nginx.ingress.kubernetes.io/canary-weight":"100"}}}'
 
-              echo "[4] Disable canary mode"
-              sleep 5
-              kubectl patch ingress frontend-ingress-canary -p '{"metadata":{"annotations":{"nginx.ingress.kubernetes.io/canary":"false"}}}'
-            EOF
+  #             echo "[4] Disable canary mode"
+  #             sleep 5
+  #             kubectl patch ingress frontend-ingress-canary -p '{"metadata":{"annotations":{"nginx.ingress.kubernetes.io/canary":"false"}}}'
+  #           EOF
 
 workflows:
   version: 2
@@ -94,6 +94,6 @@ workflows:
       - docker-build-and-push:
           requires:
             - frontend-build
-      - ssh-deploy:
-          requires:
-            - docker-build-and-push
+      # - ssh-deploy:
+      #     requires:
+      #       - docker-build-and-push
