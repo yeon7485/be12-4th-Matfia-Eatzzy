@@ -13,7 +13,7 @@ spec:
       paths:
       - path: /eatzzy(/|$)(.*)
         pathType: Prefix
-        frontend:
+        backend:
           service:
             name: frontend-svc-b
             port:
