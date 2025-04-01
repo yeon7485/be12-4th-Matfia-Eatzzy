@@ -102,27 +102,44 @@ pipeline {
                stage('Deploy Canary B') {
           steps {
             script {
-              echo "🚀 Starting Canary Deployment for B"
-        
-              sh """
-                ssh -o StrictHostKeyChecking=no test@192.0.3.10 "echo '[0] Apply Ingress Canary Configuration'"
-                ssh -o StrictHostKeyChecking=no test@192.0.3.10 "kubectl apply -f k8s/frontend-ingress-canary.yml"
-        
-                ssh -o StrictHostKeyChecking=no test@192.0.3.10 "echo '[1] Deploy B (Keep A running)'"
-                ssh -o StrictHostKeyChecking=no test@192.0.3.10 "kubectl apply -f k8s/frontend-deployment-b.yml"
-        
-                ssh -o StrictHostKeyChecking=no test@192.0.3.10 "echo '[2] Wait and shift 50% traffic to B'"
-                ssh -o StrictHostKeyChecking=no test@192.0.3.10 "sleep 5 && kubectl patch ingress frontend-ingress-canary -p '{\\\"metadata\\\":{\\\"annotations\\\":{\\\"nginx.ingress.kubernetes.io/canary-weight\\\":\\\"50\\\"}}}'"
-        
-                ssh -o StrictHostKeyChecking=no test@192.0.3.10 "echo '[3] Wait and shift 100% traffic to B'"
-                ssh -o StrictHostKeyChecking=no test@192.0.3.10 "sleep 5 && kubectl patch ingress frontend-ingress-canary -p '{\\\"metadata\\\":{\\\"annotations\\\":{\\\"nginx.ingress.kubernetes.io/canary-weight\\\":\\\"100\\\"}}}'"
-        
-                ssh -o StrictHostKeyChecking=no test@192.0.3.10 "echo '[4] Disable canary mode'"
-                ssh -o StrictHostKeyChecking=no test@192.0.3.10 "sleep 5 && kubectl patch ingress frontend-ingress-canary -p '{\\\"metadata\\\":{\\\"annotations\\\":{\\\"nginx.ingress.kubernetes.io/canary\\\":\\\"false\\\"}}}'"
-        
-                ssh -o StrictHostKeyChecking=no test@192.0.3.10 "echo '[5] Scale down A (Optional)'"
-                ssh -o StrictHostKeyChecking=no test@192.0.3.10 "kubectl scale deployment frontend-deployment-a --replicas=0"
-              """
+                def buildTag = readFile('frontend_circleci_build_number.txt').trim()
+                  echo "🚀 Deploying Frontend YAMLs with tag: ${buildTag}"
+                
+                echo "📤 Sending frontend YAMLs to remote server..."
+             sh """
+                    module="frontend"
+                    local_dir="k8s/\$module"
+                    remote_dir="/home/test/k8s/\$module"
+            
+                    echo "📦 Deploying YAMLs for module: \$module"
+            
+                    ssh -o StrictHostKeyChecking=no test@192.0.3.10 "mkdir -p \$remote_dir"
+            
+                    for file in \$local_dir/*.yml; do
+                      filename=\$(basename \$file)
+                      echo "📤 Copying \$filename to remote"
+            
+                      scp -o StrictHostKeyChecking=no \$file test@192.0.3.10:\$remote_dir/
+                      
+                      echo "🛠 Replacing 'latest' with version tag 0.1.${buildTag} in \$filename"
+                      ssh -o StrictHostKeyChecking=no test@192.0.3.10 "sed -i 's/latest/0.1.${buildTag}/g' \$remote_dir/\$filename"
+                      
+                      echo "🚀 Applying \$filename"
+                      ssh -o StrictHostKeyChecking=no test@192.0.3.10 "kubectl apply -f \$remote_dir/\$filename"
+                    done
+            
+                    echo "🕹 Adjusting ingress canary routing..."
+            
+                    ssh -o StrictHostKeyChecking=no test@192.0.3.10 "sleep 5 && kubectl patch ingress frontend-ingress-canary -p '{\\\"metadata\\\":{\\\"annotations\\\":{\\\"nginx.ingress.kubernetes.io/canary-weight\\\":\\\"50\\\"}}}'"
+            
+                    ssh -o StrictHostKeyChecking=no test@192.0.3.10 "sleep 5 && kubectl patch ingress frontend-ingress-canary -p '{\\\"metadata\\\":{\\\"annotations\\\":{\\\"nginx.ingress.kubernetes.io/canary-weight\\\":\\\"100\\\"}}}'"
+            
+                    ssh -o StrictHostKeyChecking=no test@192.0.3.10 "sleep 5 && kubectl patch ingress frontend-ingress-canary -p '{\\\"metadata\\\":{\\\"annotations\\\":{\\\"nginx.ingress.kubernetes.io/canary\\\":\\\"false\\\"}}}'"
+            
+                    echo "✅ Canary flow completed. Now scaling down A..."
+            
+                    ssh -o StrictHostKeyChecking=no test@192.0.3.10 "kubectl scale deployment frontend-deployment-a --replicas=0"
+                  """
             }
           }
         }
