@@ -12,7 +12,7 @@ spec:
       paths:
       - path: /default(/|$)(.*)
         pathType: Prefix
-        frontend:
+        backend:
           service:
             name: frontend-svc-a
             port:
