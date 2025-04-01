@@ -130,15 +130,15 @@ pipeline {
             
                     echo "🕹 Adjusting ingress canary routing..."
             
-                    ssh -o StrictHostKeyChecking=no test@192.0.3.10 "sleep 5 && kubectl patch ingress frontend-ingress-canary-b -p '{\\\"metadata\\\":{\\\"annotations\\\":{\\\"nginx.ingress.kubernetes.io/canary-weight\\\":\\\"50\\\"}}}'"
+                    ssh -o StrictHostKeyChecking=no test@192.0.3.10 "sleep 5 && kubectl patch ingress frontend-canary-b -p '{\\\"metadata\\\":{\\\"annotations\\\":{\\\"nginx.ingress.kubernetes.io/canary-weight\\\":\\\"50\\\"}}}'"
             
-                    ssh -o StrictHostKeyChecking=no test@192.0.3.10 "sleep 5 && kubectl patch ingress frontend-ingress-canary-b -p '{\\\"metadata\\\":{\\\"annotations\\\":{\\\"nginx.ingress.kubernetes.io/canary-weight\\\":\\\"100\\\"}}}'"
+                    ssh -o StrictHostKeyChecking=no test@192.0.3.10 "sleep 5 && kubectl patch ingress frontend-canary-b -p '{\\\"metadata\\\":{\\\"annotations\\\":{\\\"nginx.ingress.kubernetes.io/canary-weight\\\":\\\"100\\\"}}}'"
             
-                    ssh -o StrictHostKeyChecking=no test@192.0.3.10 "sleep 5 && kubectl patch ingress frontend-ingress-canary-b -p '{\\\"metadata\\\":{\\\"annotations\\\":{\\\"nginx.ingress.kubernetes.io/canary\\\":\\\"false\\\"}}}'"
+                    ssh -o StrictHostKeyChecking=no test@192.0.3.10 "sleep 5 && kubectl patch ingress frontend-canary-b -p '{\\\"metadata\\\":{\\\"annotations\\\":{\\\"nginx.ingress.kubernetes.io/canary\\\":\\\"false\\\"}}}'"
             
                     echo "✅ Canary flow completed. Now scaling down A..."
             
-                    ssh -o StrictHostKeyChecking=no test@192.0.3.10 "kubectl scale deployment frontend-deployment-a --replicas=0"
+                    ssh -o StrictHostKeyChecking=no test@192.0.3.10 "kubectl scale deployment frontend-a --replicas=0"
                   """
             }
           }
