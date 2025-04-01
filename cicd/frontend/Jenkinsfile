@@ -108,7 +108,7 @@ pipeline {
                 echo "📤 Sending frontend YAMLs to remote server..."
              sh """
                     module="frontend"
-                    local_dir="cicd/backend/k8s"
+                    local_dir="cicd/frontend/k8s"
                     remote_dir="/home/test/k8s/\$module"
             
                     echo "📦 Deploying YAMLs for module: \$module"
