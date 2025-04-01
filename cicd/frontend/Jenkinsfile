@@ -88,7 +88,7 @@ pipeline {
                     def buildNumber = sh(
                         script: """
                             curl --silent --location "https://circleci.com/api/v2/workflow/${workflowId}/job" \\
-                            --header "Circle-Token: ${CIRCLECI_TOKEN}" | jq -r '.items[] | select(.name == "build-and-push") | .job_number'
+                            --header "Circle-Token: ${CIRCLECI_TOKEN}" | jq -r '.items[] | select(.name == "build-and-deploy") | .job_number'
                         """,
                         returnStdout: true
                     ).trim()
